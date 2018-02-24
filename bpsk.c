@@ -7,6 +7,26 @@
  * this stuff is worth it, you can buy me a beer in return.
  */
 
+
+/*
+ * Some theorie of operation
+ * This is a bpsk-phase-locked-loop receiver/demodulator based on
+ * costas loop.
+ *
+ * Feedback value is taken from expirience and testing
+ * 
+ * Low Pass Filter is an FIR Filter:
+ * Computes fast and errors are not summing up.
+ *
+ * In simulation, it catches the proper frequency between
+ * ~48-58kHz within 10000 iterations
+ */
+
+/*
+ * TODO:
+ * - Sample interpolation, at best triangle to get the peaks
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +36,9 @@
 
 #define REF_FREQ (4000000/76) /* 52631.57894736842105263157 Hz */
 #define REF_PERIOD (MICROSECONDS/REF_FREQ) /* 19 us for a full wave */
+
+#define SAMPLES_PER_BIT 48
+#define BIT_RATE (REF_FREQ/SAMPLES_PER_BIT) /* 1096.49122807017543859649 */
 
 #define SAMPLE_RATE	192000
 #define SAMPLE_PERIOD (MICROSECONDS/SAMPLE_RATE)
@@ -71,7 +94,7 @@ lpf_Q.last_index = 0;
 }
 
 float period;    /* inverese of current frequency */
-float phase;     /* phase offset */
+float phase;     /* current phase offset */
 float lock;      /* how well the signal is locked */
 float ask;       /* quality of the signal */
 
@@ -99,31 +122,38 @@ int main(int argc, char **argv)
 {
 long long i;
 float I,Q,S;
-float S_I, S_Q, err;
-float a,b; 
+float S_I, S_Q, err, err_int;
+float a,b,intgralf; 
 
-a = 0.05; /* phase adjustment (0..1) */
+a = 0.2; /* phase adjustment (0..1) */
 b = a * a * 0.25; /* freq adjustment) */
-period = 19;
+intgralf = 1.2 * a / REF_PERIOD;
+period = REF_PERIOD;
 phase = .55 * 2 * M_PI;
 lock = 0;
 ask = 0;
 
 setup_lpfs();
 
+err_int = 0;
 /* Main loop; to be called every SAMPLE_PERIOD */
-for( i = 0; i < 1000; i++) {
+printf(" period, phase, sample, I, Q, lock, ask, ");
+printf("S_I, S_Q, err, err_int\n");
+for( i = 0; i < 100000; i++) {
 S = get_sample();
 get_IQ(&I, &Q);
-
-printf("period %f, phase %f, sample %f, I %f, Q %f lock %f ask %f\n", period, phase, S, I, Q, lock, ask);
+printf("%f, %f, %f, %f, %f, %f, %f, ", period, phase, S, I, Q, lock, ask);
 
 /* Multiply  & LPF */
 S_I = lpf(&lpf_I, S * I);
 S_Q = lpf(&lpf_Q, S * Q);
 
-err = (S_I > 0)?  S_Q : -S_Q;
-printf("S_I %f S_Q %f, err %f\n", S_I, S_Q, err);
+/* discriminator function: use least computional effort, good for high S/N */
+err = (S_I > 0)?  S_Q : -S_Q; /* sign(S_I) * S_Q, simpler than atan() and works as well */
+printf("%f, %f, %f, %f\n", S_I, S_Q, err, err_int);
+/* apply P-I filter; values from Ziegler-Nichols */
+err_int += err * SAMPLE_PERIOD;
+err += err_int * intgralf;
 phase += a * err;
 period -= b * err;
 #if 0
