@@ -43,6 +43,8 @@
 #define SAMPLE_RATE	192000
 #define SAMPLE_PERIOD (MICROSECONDS/SAMPLE_RATE)
 
+char modulation[] = {1}; /* 1,-1 bit squence repeats endlessly */
+
 /* LPF Filter features */
 #define CUTOFF_FREQ 55000 /* Should be derived from REF_FREQ + Signal */
 #define STOPBAND_FREQ 91000
@@ -101,10 +103,20 @@ float ask;       /* quality of the signal */
 float get_sample()
 {
 static float f = -SAMPLE_PERIOD * 2 * M_PI / REF_PERIOD;
+static int fullwaves = 0;
+static int bitcounter = 0;
 
 f += SAMPLE_PERIOD * 2 * M_PI  / REF_PERIOD ;
-if (f > 2 * M_PI) f -= 2 * M_PI;
-return sin(f);
+if (f > 2 * M_PI) { /* nyquist makes sure we have at least 2 sample per period */
+  f -= 2 * M_PI;
+  fullwaves++;
+  fullwaves %= PERIODS_PER_BIT;
+  if (fullwaves == 0) {
+  	bitcounter++;
+	bitcounter %= sizeof(modulation);
+  }
+}
+return modulation[bitcounter]*sin(f);
 }
 
 void get_IQ(float *I, float *Q)
