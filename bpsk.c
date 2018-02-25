@@ -46,8 +46,8 @@
 char modulation[] = {1}; /* 1,-1 bit squence repeats endlessly */
 
 /* LPF Filter features */
-#define CUTOFF_FREQ 55000 /* Should be derived from REF_FREQ + Signal */
-#define STOPBAND_FREQ 91000
+#define CUTOFF_FREQ (REF_FREQ + 3 * BIT_RATE) /* 55921.05263157894736842104 for some headroom */
+#define STOPBAND_FREQ (REF_FREQ - 12 * BIT_RATE) /* 92105.26315789473684210526 for some headroom */
 #define NTAPS 7		/* Number of filter taps */
 
 float lpf_coeff[NTAPS];
