@@ -16,7 +16,7 @@
  * Feedback value is taken from expirience and testing
  * 
  * Low Pass Filter is an FIR Filter:
- * Computes fast and errors are not summing up.
+ * Linear pahse, computes fast and errors are not summing up.
  *
  * In simulation, it catches the proper frequency between
  * ~48-58kHz within 10000 iterations
@@ -24,7 +24,10 @@
 
 /*
  * TODO:
+ * - Check LPR FIlter cutoff: 2*Bitrate should be ok.
  * - Sample interpolation, at best triangle to get the peaks
+ * - Use bandpass sampling to greatly reduce the required
+ *   sampling rate
  */
 
 #include <stdio.h>
@@ -37,13 +40,15 @@
 #define REF_FREQ (4000000/76) /* 52631.57894736842105263157 Hz */
 #define REF_PERIOD (MICROSECONDS/REF_FREQ) /* 19 us for a full wave */
 
-#define PERIODS_PER_BIT 48
+#define PERIODS_PER_CLOCK 24
+#define CLOCK_RATE (REF_FREQ/PERIODS_PER_CLOCK)
+#define PERIODS_PER_BIT (2*PERIODS_PER_CLOCK)
 #define BIT_RATE (REF_FREQ/PERIODS_PER_BIT) /* 1096.49122807017543859649 */
 
 #define SAMPLE_RATE	192000
 #define SAMPLE_PERIOD (MICROSECONDS/SAMPLE_RATE)
 
-char modulation[] = {1}; /* 1,-1 bit squence repeats endlessly */
+char modulation[] = {1,-1}; /* 1,-1 bit sequence repeats endlessly */
 
 /* LPF Filter features */
 #define CUTOFF_FREQ (REF_FREQ + 3 * BIT_RATE) /* 55921.05263157894736842104 for some headroom */
@@ -151,7 +156,7 @@ err_int = 0;
 /* Main loop; to be called every SAMPLE_PERIOD */
 printf(" period, phase, sample, I, Q, lock, ask, ");
 printf("S_I, S_Q, err, err_int\n");
-for( i = 0; i < 100000; i++) {
+for( i = 0; i < 1000; i++) {
 S = get_sample();
 get_IQ(&I, &Q);
 printf("%f, %f, %f, %f, %f, %f, %f, ", period, phase, S, I, Q, lock, ask);
