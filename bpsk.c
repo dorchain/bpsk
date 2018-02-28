@@ -48,7 +48,7 @@
 #define SAMPLE_RATE	192000
 #define SAMPLE_PERIOD (MICROSECONDS/SAMPLE_RATE)
 
-char modulation[] = {1,-1}; /* 1,-1 bit sequence repeats endlessly */
+char modulation[] = {1,-1,1,1,-1,1,-1,-1}; /* 1,-1 bit sequence repeats endlessly */
 
 /* LPF Filter features */
 #define CUTOFF_FREQ (REF_FREQ + 3 * BIT_RATE) /* 55921.05263157894736842104 for some headroom */
@@ -104,6 +104,9 @@ float period;    /* inverese of current frequency */
 float phase;     /* current phase offset */
 float lock;      /* how well the signal is locked */
 float ask;       /* quality of the signal */
+unsigned int wavecounter = 0;
+char oldsign = 0;
+int locked = 0;
 
 float get_sample()
 {
@@ -115,7 +118,7 @@ f += SAMPLE_PERIOD * 2 * M_PI  / REF_PERIOD ;
 if (f > 2 * M_PI) { /* nyquist makes sure we have at least 2 sample per period */
   f -= 2 * M_PI;
   fullwaves++;
-  fullwaves %= PERIODS_PER_BIT;
+  fullwaves %= PERIODS_PER_CLOCK;
   if (fullwaves == 0) {
   	bitcounter++;
 	bitcounter %= sizeof(modulation);
@@ -129,7 +132,10 @@ void get_IQ(float *I, float *Q)
 static float f = -SAMPLE_PERIOD * 2 * M_PI / REF_PERIOD;
 
 f += SAMPLE_PERIOD * 2 * M_PI  / period; 
-if (f > 2 * M_PI) f -= 2 * M_PI;
+if (f > 2 * M_PI) {
+  f -= 2 * M_PI;
+  wavecounter++;
+}
 *I = cos(f + phase);
 *Q = -sin(f + phase);
 }
@@ -141,6 +147,8 @@ long long i;
 float I,Q,S;
 float S_I, S_Q, err, err_int;
 float a,b,intgralf; 
+char shortcounter = 0;
+char sign, oldsign = 0;
 
 a = 0.2; /* phase adjustment (0..1) */
 b = a * a * 0.25; /* freq adjustment) */
@@ -156,7 +164,8 @@ err_int = 0;
 /* Main loop; to be called every SAMPLE_PERIOD */
 printf(" period, phase, sample, I, Q, lock, ask, ");
 printf("S_I, S_Q, err, err_int\n");
-for( i = 0; i < 1000; i++) {
+for( i = 0; i < 10000; i++) {
+
 S = get_sample();
 get_IQ(&I, &Q);
 printf("%f, %f, %f, %f, %f, %f, %f, ", period, phase, S, I, Q, lock, ask);
@@ -178,9 +187,42 @@ if (phase > 2 * M_PI) phase -= 2 * M_PI;
 if (phase < -2 * M_PI) phase += 2 * M_PI;
 #endif
 
-S_I *= S_I;
-S_Q *= S_Q;
-lock = S_I - S_Q;
-ask = S_I + S_Q;
+lock = (S_I * S_I) - (S_Q * S_Q);
+ask = (S_I * S_I) - (S_Q * S_Q);
+
+/* Decoder output */
+if (lock > 0.15 ) {
+  if (!locked) {
+    locked = 1;
+    printf("Locked\n");
+  }
+} else {
+  if (locked) {
+    locked = 0;
+    printf("Lost Lock %f\n",lock);
+  }
+}
+if (locked && (fabs(S_I) > 0.38)) {
+  sign = (S_I > 0)? 1:-1;
+  if (oldsign != sign) {
+printf("wavecounter: %d\n", wavecounter);
+    if (wavecounter > (PERIODS_PER_CLOCK + PERIODS_PER_BIT) / 2) {
+      if (shortcounter > 0) {
+        printf("single short transition!\n");
+	shortcounter = 0;
+      }
+      printf("Received bit: 1\n");
+    } else {
+      shortcounter++;
+      if (shortcounter == 2) {
+        printf("Received bit: 0\n");
+	shortcounter = 0;
+      }
+    }
+    oldsign = sign;
+    wavecounter = 0;
+  }
+}
+
 }
 }
