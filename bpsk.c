@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
 #include <math.h>
 
 #define MICROSECONDS 1000000
@@ -110,21 +112,23 @@ int locked = 0;
 
 float get_sample()
 {
-static float f = -SAMPLE_PERIOD * 2 * M_PI / REF_PERIOD;
-static int fullwaves = 0;
-static int bitcounter = 0;
+float S;
+int r;
 
-f += SAMPLE_PERIOD * 2 * M_PI  / REF_PERIOD ;
-if (f > 2 * M_PI) { /* nyquist makes sure we have at least 2 sample per period */
-  f -= 2 * M_PI;
-  fullwaves++;
-  fullwaves %= PERIODS_PER_CLOCK;
-  if (fullwaves == 0) {
-  	bitcounter++;
-	bitcounter %= sizeof(modulation);
-  }
+r = read(0, &S, sizeof(S));
+if (r == 0) {
+  printf("Enf of input reached\n");
+  exit(EXIT_SUCCESS);
 }
-return modulation[bitcounter]*sin(f);
+if (r < 0) {
+  printf("Error reading input %s\n", strerror(errno));
+  exit(EXIT_FAILURE);
+}
+if (r != sizeof(S)) {
+  printf("unexspected number of input bytes: %d\n", r);
+  exit(EXIT_FAILURE);
+}
+return S;
 }
 
 void get_IQ(float *I, float *Q)
@@ -149,6 +153,8 @@ float S_I, S_Q, err, err_int;
 float a,b,intgralf; 
 char shortcounter = 0;
 char sign, oldsign = 0;
+
+printf("Call with sox <signal.wav> -t f32 - | %s\n", argv[0]);
 
 a = 0.2; /* phase adjustment (0..1) */
 b = a * a * 0.25; /* freq adjustment) */

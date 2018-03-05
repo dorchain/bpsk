@@ -2,3 +2,5 @@
 *.o
 *.csv
 bpsk
+signal.wav
+signalgen
