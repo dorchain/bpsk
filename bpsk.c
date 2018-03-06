@@ -43,7 +43,7 @@
 #define REF_PERIOD (MICROSECONDS/REF_FREQ) /* 19 us for a full wave */
 
 #define PERIODS_PER_CLOCK 24
-#define CLOCK_RATE (REF_FREQ/PERIODS_PER_CLOCK)
+#define CLOCK_RATE (REF_FREQ/PERIODS_PER_CLOCK) /* 2192.98245614035087719298 */
 #define PERIODS_PER_BIT (2*PERIODS_PER_CLOCK)
 #define BIT_RATE (REF_FREQ/PERIODS_PER_BIT) /* 1096.49122807017543859649 */
 
@@ -53,8 +53,7 @@
 char modulation[] = {1,-1,1,1,-1,1,-1,-1}; /* 1,-1 bit sequence repeats endlessly */
 
 /* LPF Filter features */
-#define CUTOFF_FREQ (REF_FREQ + 3 * BIT_RATE) /* 55921.05263157894736842104 for some headroom */
-#define STOPBAND_FREQ (REF_FREQ - 12 * BIT_RATE) /* 92105.26315789473684210526 for some headroom */
+#define CUTOFF_FREQ (3 * CLOCK_RATE) /* 6578.94736842105263157894 for some headroom */
 #define NTAPS 7		/* Number of filter taps */
 
 float lpf_coeff[NTAPS];
@@ -147,7 +146,6 @@ if (f > 2 * M_PI) {
 
 int main(int argc, char **argv)
 {
-long long i;
 float I,Q,S;
 float S_I, S_Q, err, err_int;
 float a,b,intgralf; 
@@ -159,8 +157,8 @@ printf("Call with sox <signal.wav> -t f32 - | %s\n", argv[0]);
 a = 0.2; /* phase adjustment (0..1) */
 b = a * a * 0.25; /* freq adjustment) */
 intgralf = 1.2 * a / REF_PERIOD;
-period = REF_PERIOD;
-phase = .55 * 2 * M_PI;
+period = 18.25;
+phase = 0.5 * 2 * M_PI;
 lock = 0;
 ask = 0;
 
@@ -170,7 +168,7 @@ err_int = 0;
 /* Main loop; to be called every SAMPLE_PERIOD */
 printf(" period, phase, sample, I, Q, lock, ask, ");
 printf("S_I, S_Q, err, err_int\n");
-for( i = 0; i < 10000; i++) {
+while (1) {
 
 S = get_sample();
 get_IQ(&I, &Q);
@@ -194,10 +192,10 @@ if (phase < -2 * M_PI) phase += 2 * M_PI;
 #endif
 
 lock = (S_I * S_I) - (S_Q * S_Q);
-ask = (S_I * S_I) - (S_Q * S_Q);
+ask = (S_I * S_I) + (S_Q * S_Q);
 
 /* Decoder output */
-if (lock > 0.15 ) {
+if (lock > 0.011 ) {
   if (!locked) {
     locked = 1;
     printf("Locked\n");
@@ -208,13 +206,13 @@ if (lock > 0.15 ) {
     printf("Lost Lock %f\n",lock);
   }
 }
-if (locked && (fabs(S_I) > 0.38)) {
+if (locked && (fabs(S_I) > 0.125)) {
   sign = (S_I > 0)? 1:-1;
   if (oldsign != sign) {
 printf("wavecounter: %d\n", wavecounter);
     if (wavecounter > (PERIODS_PER_CLOCK + PERIODS_PER_BIT) / 2) {
       if (shortcounter > 0) {
-        printf("single short transition!\n");
+        printf("single short transition (Missed a zero?)!\n");
 	shortcounter = 0;
       }
       printf("Received bit: 1\n");
@@ -231,4 +229,5 @@ printf("wavecounter: %d\n", wavecounter);
 }
 
 }
+/* not reached */
 }
